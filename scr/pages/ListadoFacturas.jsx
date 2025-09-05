@@ -1,233 +1,241 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Button, FlatList, StyleSheet, ScrollView, TextInput, Image, TouchableOpacity } from 'react-native';
-import { Table, Row } from 'react-native-table-component';
-import Icon from 'react-native-vector-icons/FontAwesome'; // Importing FontAwesome icons
-
-import logos from '../../assets/logo.png';
+import { View, Text, Button, StyleSheet, ScrollView, TextInput, Image, TouchableOpacity, Platform } from 'react-native';
+import { Row } from 'react-native-table-component';
+import Icon from 'react-native-vector-icons/FontAwesome';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import logodr from '../../assets/logodr.png';
 import axiosInstance from '../utils/api';
-
 const ListadoFacturas = ({ navigation }) => {
   const [data, setData] = useState([]);
-  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState(null); // ahora es Date o null
   const [filteredData, setFilteredData] = useState([]);
-  const tableHead = ['Fecha', 'Documento', 'Nombre del Cliente', 'Subtotal', 'IVA', 'Total', 'Acciones'];
-
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [vistoIds, setVistoIds] = useState(new Set()); // para marcar vistos
   useEffect(() => {
     const fetchData = async () => {
       try {
-        //const response = await axios.get('http://localhost:8000/productos?db=cliente1'); // Cambia la URL según tu configuración
         const response = await axiosInstance.get('/sige/factura_producto/');
-        setData(response.data);
-        setFilteredData(response.data); // Initialize filtered data with all data
+        const sortedData = response.data.sort((a, b) => new Date(b.i502_fec_emision) - new Date(a.i502_fec_emision));
+        setData(sortedData);
+        setFilteredData(sortedData);
       } catch (error) {
         console.error('Error fetching data:', error);
       }
     };
-
     fetchData();
   }, []);
-
   const filterItemsByDate = () => {
     if (selectedDate) {
-      const filtered = data.filter(item => item.fecha_emision === selectedDate);
+      const dateStr = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const filtered = data.filter(item => item.i502_fec_emision.startsWith(dateStr));
       setFilteredData(filtered);
     } else {
-      setFilteredData(data); // Reset to all data if no date is selected
+      setFilteredData(data);
     }
   };
-
+  const onChangeDate = (event, selected) => {
+    setShowDatePicker(Platform.OS === 'ios'); // en android se cierra al seleccionar
+    if (selected) {
+      setSelectedDate(selected);
+    }
+  };
   const handleEdit = (documento) => {
-    // Navigate to edit screen with the selected document
     navigation.navigate('EditFactura', { documento });
   };
-
   const handleDownloadPDF = (documento) => {
-    // Logic to download PDF
     console.log('Download PDF for:', documento);
   };
-
+  const toggleVisto = (id) => {
+    setVistoIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
   return (
     <View style={styles.container}>
+      {/* Logo y razón social */}
       <View style={styles.titleContainer}>
-        <Image source={logos} style={styles.icon} />
-        <Text style={styles.title}>Dr. Cabrera</Text>
-        <TouchableOpacity onPress={() => navigation.toggleDrawer()} style={styles.menuIcon}>
-          <Icon name="bars" size={24} color="#000" />
-        </TouchableOpacity>
+        <Image source={logodr} style={styles.icon} />
+        <Text style={styles.razonSocial}>Razón Social Aquí</Text>
       </View>
-
-      <TextInput
-        placeholder="Ingrese la fecha (YYYY-MM-DD)"
-        value={selectedDate}
-        onChangeText={setSelectedDate}
-        style={{ borderWidth: 1, marginBottom: 10, padding: 10 }}
-      />
-      <Button title="Filtrar"  style={styles.button} onPress={filterItemsByDate} />
-      <ScrollView horizontal>
-        <View >
-          {filteredData.map((documento, index) => (
-            <View key={index} style={styles.documentContainer}>
-              {/* First Row: Document Number, Client Name, Emission Date */}
-                <Row 
-                data={[
-                  <Text style={styles.clientName}>{documento.nombre_cliente}</Text>, // Client Name
-                  <Text style={styles.emissionDate}>Fecha: {documento.i502_fec_emision}</Text> // Emission Date
-                 ]} 
-                style={styles.row} 
-                textStyle={styles.text} 
-                widthArr={[270,80]} // Adjust widths as needed
-              />
-              <Row 
-                data={[
-                  <Text style={styles.clientci}>{documento.i502_cliente}</Text>, // Client Name
-                  <Text style={styles.total}>{`$${documento.i502_total}`}</Text>, // Total formatted as currency
-                
-                ]} 
-                style={styles.row} 
-                textStyle={styles.text} 
-                widthArr={[290, 100]} // Adjust widths as needed
-              />
-              
-              {/* Second Row: Total, Subtotal, VAT */}
-              <Row 
-                data={[
-                  <Text style={styles.documentNumber}>Nro: {documento.i502_numero}</Text>, // Document Number
-                  <View style={styles.actionContainer}>
-                    <TouchableOpacity onPress={() => handleEdit(documento)}>
-                      <Icon name="edit" size={20} color="#000" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDownloadPDF(documento)}>
-                      <Icon name="file-pdf-o" size={20} color="#e74c3c" />
-                    </TouchableOpacity>
-                  </View>
-                ]} 
-                style={styles.row} 
-                textStyle={styles.text} 
-                widthArr={[290, 50, 50]} // Adjust widths as needed
-              />
-              
-              {/* Third Row: Action Icons */}
-            
-              <View style={styles.separator} />
-            </View>
-             
-          ))}
-        </View>
-      </ScrollView>
-
+      {/* Selector de fecha y botón filtrar */}
+      <View style={styles.buscarContainer}>
+        <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateInput}>
+          <Text style={{ color: selectedDate ? '#000' : '#999' }}>
+            {selectedDate ? selectedDate.toISOString().split('T')[0] : 'Seleccione fecha'}
+          </Text>
+        </TouchableOpacity>
+        <Button title="Filtrar" onPress={filterItemsByDate} />
+      </View>
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDate || new Date()}
+          mode="date"
+          display="default"
+          onChange={onChangeDate}
+          maximumDate={new Date()}
+        />
+      )}
+      {/* Botones de navegación */}
       <View style={styles.buttons}>
         <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('NuevaFactura')}>
           <Icon name="plus" size={20} color="#e9f7ef" />
           <Text style={styles.buttonText}>Nuevo</Text>
         </TouchableOpacity>
-        
         <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('Pacientes')}>
           <Icon name="users" size={20} color="#e9f7ef" />
           <Text style={styles.buttonText}>Pacientes</Text>
         </TouchableOpacity>
-        
         <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('Reportes')}>
           <Icon name="file-text" size={20} color="#e9f7ef" />
-          <Text style={styles.buttonText}>Reportes</Text>
+            <Text style={styles.buttonText}>Reportes</Text>
         </TouchableOpacity>
       </View>
-    </View>
+      {/* Lista de facturas */}
+      <ScrollView style={{ marginTop: 0 }}>
+        {filteredData.map((documento, index) => {
+          const isVisto = vistoIds.has(documento.i502_numero);
+          return (
+            <TouchableOpacity
+              key={index}
+              style={[styles.documentContainer, isVisto && styles.vistoContainer]}
+              onPress={() => toggleVisto(documento.i502_numero)}
+              activeOpacity={0.8}
+            >
+                  <View style={styles.rowFactura}>
+                {/* Iconos a la izquierda */}
+                <View style={styles.iconosContainer}>
+                  <TouchableOpacity onPress={() => handleEdit(documento)} style={styles.iconButton}>
+                    <Icon name="edit" size={20} color="#000" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDownloadPDF(documento)} style={styles.iconButton}>
+                    <Icon name="file-pdf-o" size={20} color="#e74c3c" />
+                  </TouchableOpacity>
+                </View>
+                 {/* Texto a la derecha */}
+                <View style={styles.textContainer}>
+                  <Text style={styles.clientName}>{documento.nombre_cliente}</Text>
+                  <View style={styles.textContainer2}>
+                      <Text style={styles.emissionDate}>Fecha: {documento.i502_fec_emision}</Text>
+                      <Text style={styles.emissionDate}>  No.{documento.i502_numero}</Text>
+                   </View>
+                </View>
+                {/* Total a la derecha */}
+                <Text style={styles.total}>{`$${documento.i502_total}`}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+        </View>
   );
 };
-
 const styles = StyleSheet.create({
   container: {
+    marginTop: 0,
     flex: 1,
-    padding: 16,
+    padding: 21,
     backgroundColor: '#fff',
-  },
-  head: {
-    height: 40,
-    backgroundColor: '#f1f8ff',
-  },
-  row: {
-    height: 30,
-    backgroundColor: '#e9f7ef',
-  },
-  text: {
-    margin: 6,
-  },
-  icon: {
-    left: 5,
-    width: 181,
-    height: 45,
-    marginRight: 10,
   },
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 1,
     marginBottom: 15,
+  },
+  icon: {
+    width: 141,
+    height: 111,
+    resizeMode: 'contain',
+  },
+   razonSocial: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 10,
+    color: '#031578',
+  },
+  buscarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  dateInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    marginRight: 10,
+    flex: 1,
   },
   buttons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 11,
   },
-  button: {
+   button: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#031578',
-    
     padding: 10,
     borderRadius: 5,
     flex: 1,
-    marginHorizontal: 5, // Add margin to separate buttons
+    marginHorizontal: 5,
   },
   buttonText: {
-    marginLeft: 5, // Space between icon and text
+    marginLeft: 5,
     fontSize: 16,
-   color: '#e9f7ef',
+    color: '#e9f7ef',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    flex: 1,
+   documentContainer: {
+    marginTop: 5,
+    marginRight: 5,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#e9f7ef',
   },
-  menuIcon: {
-    marginLeft: 10,
+  vistoContainer: {
+    backgroundColor: '#ffa500', // naranja
   },
-  actionContainer: {
+  rowFactura: {
     flexDirection: 'row',
+    alignItems: 'center',
+  },
+   iconosContainer: {
+    flexDirection: 'row',
+    width: 70,
     justifyContent: 'space-around',
   },
-  clientName: {
-    fontSize: 12, // Larger font size for client name
+  iconButton: {
+    paddingHorizontal: 5,
+  },
+  textContainer: {
+    flex: 1,
+    paddingLeft: 10,
+  },
+  textContainer2: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingLeft: 10,
+  },
+   clientName: {
+    fontSize: 14,
     fontWeight: 'bold',
-  },
-  clientci: {
-    fontSize: 11, // Larger font size for client name
-    
-  },
-  total: {
-    fontSize: 20, // Regular font size for total
-    color: '#1e2460', // Highlighted color for total
+    color: '#031578',
   },
   emissionDate: {
-    fontSize: 11, // Regular font size for emission date
+    fontSize: 12,
+    color: '#555',
   },
-  documentNumber: {
-    fontSize: 12, // Smaller font size for document number
+  total: {
+    fontSize: 22,
+    color: '#f5ac40ff',
+    
   },
-  documentContainer: {
-  marginTop: 10, // Reducido de 40 a 10
-  marginRight: 10, // Reducido de 30 a 10
-  padding: 10, // Reducido de 20 a 10
-  width: 480,
-  borderRadius: 8,
-  alignSelf: 'flex-end',
-  backgroundColor: '#e9f7ef'//'#dde8cb',
-  },
-separator: {
-  height: 1,
-  backgroundColor: '#ccc', // Color of the separator line
-  marginVertical: 10, // Space above and below the line
-},
-  
-});
-
+  });
 export default ListadoFacturas;
